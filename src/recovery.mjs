@@ -102,7 +102,14 @@ export function analyseRound(roundSamples, baseline) {
       if (rest.every((s) => s.pulse <= base + band)) { backAt = after[i].t; break; }
     }
   }
-  const timeToBandSec = backAt == null ? null : Math.round((backAt - peakAt) / 1000);
+  // Sub-reading precision is an illusion: if the peak is followed immediately by an in-band
+  // reading, the decay happened faster than one pulse window can resolve, and "0 s" would
+  // read as an instant recovery. Say it cannot be timed instead.
+  const readingGap = usable.length > 1
+    ? Math.min(...usable.slice(1).map((s, i) => Math.abs(s.t - usable[i].t)))
+    : 2000;
+  const tooFastToTime = backAt != null && (backAt - peakAt) < Math.max(1000, readingGap);
+  const timeToBandSec = backAt == null || tooFastToTime ? null : Math.round((backAt - peakAt) / 1000);
 
   // Exponential fit on the decay: ln(excess) vs time, after the peak.
   const decay = after.map((s) => ({ dt: (s.t - peakAt) / 1000, ex: s.pulse - base })).filter((p) => p.ex > 0.5);
@@ -137,6 +144,7 @@ export function analyseRound(roundSamples, baseline) {
     talkingShare: roundSamples.length ? Math.round((talkSamples / roundSamples.length) * 100) / 100 : null,
     caveat: !rose
       ? 'no rise above the baseline band in this window — nothing to recover from'
+      : tooFastToTime ? 'came back inside the band inside one reading — faster than the 12-second pulse window can time'
       : timeToBandSec == null ? 'still above baseline at the end of the window' : null,
   };
 }

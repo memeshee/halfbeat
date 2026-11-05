@@ -19,9 +19,19 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-export function startServer({ port = 7777, session, cfg }) {
+export function startServer({ port = 7777, session, cfg, onAbort = null }) {
   const server = http.createServer((req, res) => {
-    const url = new URL(req.url, `http://127.0.0.1:${port}`);
+    // A request target of `//`, `///` or `http://[` makes `new URL` throw, and a throw inside a
+    // request listener is uncaught: one <img src="http://127.0.0.1:PORT//"> on any page you visit
+    // would kill a running session. Guard the parse instead of trusting the target.
+    let url;
+    try {
+      url = new URL(req.url, `http://127.0.0.1:${port}`);
+    } catch {
+      res.writeHead(400, { 'content-type': 'text/plain' });
+      res.end('bad request');
+      return;
+    }
     if (url.pathname === '/api/session') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(session.buildSession()));
@@ -81,7 +91,7 @@ export function startServer({ port = 7777, session, cfg }) {
     }
     const rel = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
     const file = path.join(WEB, rel);
-    if (!file.startsWith(WEB) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+    if (!file.startsWith(WEB + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
       res.writeHead(404, { 'content-type': 'text/plain' });
       res.end('not found');
       return;
@@ -90,10 +100,21 @@ export function startServer({ port = 7777, session, cfg }) {
       'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
       'cache-control': 'no-store',
     });
-    fs.createReadStream(file).pipe(res);
+    fs.createReadStream(file).on('error', () => res.destroy()).pipe(res);
   });
 
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  // Browsers do not apply the same-origin policy to WebSockets, so without this check any page
+  // a user visits can open ws://127.0.0.1:PORT/ws, receive every sample, and send consent/abort.
+  // A same-origin page always sends an Origin header; a non-browser client sends none.
+  const localOrigin = (req) => {
+    const origin = req.headers.origin;
+    if (!origin) return true;
+    try {
+      const u = new URL(origin);
+      return u.hostname === '127.0.0.1' || u.hostname === 'localhost' || u.hostname === '[::1]';
+    } catch { return false; }
+  };
+  const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ req }) => localOrigin(req) });
   const broadcast = (msg) => {
     const data = JSON.stringify(msg);
     for (const client of wss.clients) if (client.readyState === 1) client.send(data);
@@ -102,7 +123,7 @@ export function startServer({ port = 7777, session, cfg }) {
   wss.on('connection', (ws) => {
     ws.send(JSON.stringify({ type: 'state', state: session.state() }));
     if (session.lastReport) ws.send(JSON.stringify({ type: 'report', report: session.lastReport }));
-    ws.on('message', (raw) => {
+    ws.on('message', async (raw) => {
       let msg;
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       try {
@@ -112,7 +133,8 @@ export function startServer({ port = 7777, session, cfg }) {
           case 'answer': session.answerNow(); break;
           case 'endAnswer': session.endAnswer(); break;
           case 'finish': session.finish(); break;
-          case 'abort': session.abort().then(() => process.exit(0)); break;
+          // Flush what exists before dying: an abort used to exit with no artefact at all.
+          case 'abort': await session.abort(); if (onAbort) await onAbort(); else process.exit(0); break;
           default: break;
         }
       } catch (err) {
@@ -137,6 +159,12 @@ export function startServer({ port = 7777, session, cfg }) {
     }
   });
 
+  server.on('error', (err) => {
+    console.error(err.code === 'EADDRINUSE'
+      ? `port ${port} is already in use — stop the other HalfBeat, or pass --port ${port + 1}`
+      : `server error: ${err.message}`);
+    process.exit(2);
+  });
   server.listen(port, '127.0.0.1', () => {
     console.log(`HalfBeat UI  →  http://127.0.0.1:${port}`);
     if (session.state().synthetic) console.log('source: MOCK (synthetic signals — not a real measurement)');

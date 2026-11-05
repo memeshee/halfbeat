@@ -50,40 +50,55 @@ session.on('baseline', (b) => {
   console.log(`[baseline] ${b.pulseMedian ?? '—'} bpm  ±${b.pulseBand}  (${b.readings} readings over ${b.windowSec}s)`);
 });
 
+// One exit path for every way a session can end early: stop button, SIGINT, SIGTERM.
+// It flushes what exists to its own file — never over cfg.out, which belongs to a finished run.
+async function flushAndExit(reason) {
+  try { await session.abort(); } catch { /* keep going: the flush matters more */ }
+  try { serverHandle?.close(); } catch { /* already closed */ }
+  const draft = session.buildSession();
+  if (draft.samples.length) {
+    const out = path.join(cfg.sessionsDir ?? 'sessions', `aborted-${Date.now()}.json`);
+    fs.mkdirSync(path.dirname(out), { recursive: true });
+    fs.writeFileSync(out, JSON.stringify(draft, null, 1));
+    console.log(`\nstopped (${reason}); partial session → ${out}`);
+  } else {
+    console.log(`\nstopped (${reason}); nothing was captured, nothing saved`);
+  }
+  try { await source.stop(); } catch { /* the device may already be gone */ }
+  process.exit(0);
+}
+
 let serverHandle = null;
 if (!cfg.headless) {
-  serverHandle = startServer({ port: cfg.port, session, cfg });
+  serverHandle = startServer({ port: cfg.port, session, cfg, onAbort: () => flushAndExit('stop button') });
   if (cfg.open && process.env.DISPLAY) {
     spawn('xdg-open', [`http://127.0.0.1:${cfg.port}`], { stdio: 'ignore', detached: true }).unref();
   }
 }
 
-session.on('report', (report) => {
+session.on('report', async (report) => {
   const out = cfg.out;
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(report, null, 1));
   console.log(`\n${report.headline}`);
   console.log(`session → ${out}`);
-  if (cfg.headless) {
-    source.stop().then(() => process.exit(0));
-  }
+  // The report is written: capture has no further purpose. Stop the camera in every mode, not
+  // just headless — the consent screen says the light goes out, and PRIVACY.md says capture stops
+  // when the session ends. The server stays up so the report page still renders.
+  try { await source.stop(); } catch { /* already stopped */ }
+  if (cfg.headless) process.exit(0);
 });
 
 session.run ? null : null; // (clock starts on consent)
 
 await source.start(key);
 
-process.on('SIGINT', async () => {
-  await session.abort();
-  serverHandle?.close();
-  const draft = session.buildSession();
-  if (draft.samples.length) {
-    const out = cfg.out ?? path.join('sessions', `aborted-${Date.now()}.json`);
-    fs.mkdirSync(path.dirname(out), { recursive: true });
-    fs.writeFileSync(out, JSON.stringify(draft, null, 1));
-    console.log(`\naborted; partial session → ${out}`);
-  }
-  process.exit(0);
+process.on('SIGINT', () => { flushAndExit('Ctrl+C'); });
+// A plain `kill`, a systemd stop, or a supervisor restart used to discard the session entirely.
+process.on('SIGTERM', () => { flushAndExit('SIGTERM'); });
+process.on('uncaughtException', (err) => {
+  console.error(`\nunexpected error: ${err.message}`);
+  flushAndExit('crash');
 });
 
 console.log(`HalfBeat · source=${cfg.source}${cfg.source === 'file' ? ` (${path.basename(cfg.file)})` : ''} · key from ${from}`);

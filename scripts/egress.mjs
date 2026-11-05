@@ -18,12 +18,34 @@ const childArgs = ['src/index.mjs', ...argv.filter((a) => a !== '--seconds' && a
 const seen = new Map();      // remote addr -> first seen ms
 const samples = [];
 
-function sockets(pid) {
+function descendants(rootPid) {
+  const pids = new Set([rootPid]);
+  try {
+    const out = execFileSync('ps', ['-eo', 'pid=,ppid='], { encoding: 'utf8' });
+    const rows = out.trim().split('\n').map((l) => l.trim().split(/\s+/).map(Number));
+    let added = true;
+    while (added) {
+      added = false;
+      for (const [p, pp] of rows) {
+        if (pids.has(pp) && !pids.has(p)) { pids.add(p); added = true; }
+      }
+    }
+  } catch { /* ps missing: fall back to the root pid only */ }
+  return pids;
+}
+
+/** Outbound TCP peers owned by this app's process tree — and nobody else's.
+ *  The first version of this function matched every row of `ss -tnp` that had a `users:`
+ *  field, which quietly attributed the whole desktop's traffic (Telegram, Cloudflare,
+ *  CloudFront) to the app. A privacy measurement that counts other programs' sockets is
+ *  worse than no measurement. */
+function sockets(pids) {
   try {
     const out = execFileSync('ss', ['-tnp'], { encoding: 'utf8' });
     const rows = [];
     for (const line of out.split('\n')) {
-      if (!line.includes(`pid=${pid}`) && !line.includes('users:')) continue;
+      const owners = [...line.matchAll(/pid=(\d+)/g)].map((m) => Number(m[1]));
+      if (!owners.some((p) => pids.has(p))) continue;
       const cols = line.trim().split(/\s+/);
       if (cols.length < 5) continue;
       const peer = cols[4];
@@ -42,7 +64,8 @@ const started = Date.now();
 const pid = child.pid;
 
 const timer = setInterval(() => {
-  for (const peer of sockets(pid)) {
+  const tree = descendants(pid);
+  for (const peer of sockets(tree)) {
     if (!seen.has(peer)) {
       seen.set(peer, Date.now() - started);
       try {

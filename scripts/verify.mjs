@@ -50,7 +50,10 @@ ok('the refusal names the reason', typeof noisyRound.reason === 'string' && nois
 
 const analysis = analyseRound(fixture, baseline);
 ok('peak found', Math.round(analysis.peak) === 80, `got ${analysis.peak}`);
-ok('half-life within one window of truth (12 s)', Math.abs(analysis.halfLifeSec - 12) <= 12, `got ${analysis.halfLifeSec}s`);
+// A null half-life used to pass this check (Math.abs(null - 12) === 12), and so did 0 and 24.
+ok('half-life recovered within 1 s of the 12 s truth',
+  typeof analysis.halfLifeSec === 'number' && Math.abs(analysis.halfLifeSec - 12) <= 1,
+  `got ${analysis.halfLifeSec}s`);
 ok('flagged sufficient', analysis.sufficient === true);
 const never = analyseRound(
   fixture.map((s) => ({ ...s, pulse: s.pulse + 30 })),

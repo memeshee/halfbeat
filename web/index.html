@@ -35,12 +35,14 @@
         <li><strong>No video is stored and nothing leaves this machine.</strong> Frames are processed in
         memory and thrown away; the browser UI is served from <code>127.0.0.1</code>; the SDK's usage
         telemetry is switched off in this build.</li>
-        <li><strong>What is saved:</strong> if you ask for it, a small numbers-only file on this computer
-        — no images, no audio.</li>
+        <li><strong>What is saved:</strong> at the end of the session, one small numbers-only file in
+        <code>sessions/</code> on this computer — no images, no audio, no landmarks. Delete the folder
+        and it is gone.</li>
         <li><strong>Wellness only.</strong> These are general-wellness estimates, not a medical
         measurement or a diagnosis.</li>
-        <li><strong>Stop any time:</strong> close this tab, or <kbd>Ctrl</kbd>+<kbd>C</kbd> in the
-        terminal, and the camera light goes out.</li>
+        <li><strong>Stop any time:</strong> press <em>Stop &amp; end session</em> on the live screen, or
+        <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal. The camera turns off and the numbers so far are
+        saved.</li>
       </ul>
       <div class="actions">
         <button id="btn-consent" class="primary">Turn on the camera and continue</button>
@@ -104,6 +106,7 @@
           <button id="btn-answer" class="primary hidden">Answer now</button>
           <button id="btn-endanswer" class="ghost hidden">Done answering →</button>
           <button id="btn-finish" class="ghost hidden">Finish session</button>
+          <button id="btn-stop" class="ghost hidden">Stop &amp; end session</button>
         </div>
       </section>
     </div>

@@ -159,6 +159,7 @@ function renderLive(s) {
   $('#btn-answer').classList.toggle('hidden', s.phase !== 'question');
   $('#btn-endanswer').classList.toggle('hidden', s.phase !== 'answer');
   $('#btn-finish').classList.toggle('hidden', s.roundIndex < 0 || s.phase === 'report');
+  $('#btn-stop').classList.toggle('hidden', s.phase === 'consent' || s.phase === 'report');
   drawLive();
 }
 
@@ -251,6 +252,7 @@ $('#btn-begin').addEventListener('click', () => send({ type: 'begin' }));
 $('#btn-answer').addEventListener('click', () => send({ type: 'answer' }));
 $('#btn-endanswer').addEventListener('click', () => send({ type: 'endAnswer' }));
 $('#btn-finish').addEventListener('click', () => send({ type: 'finish' }));
+$('#btn-stop').addEventListener('click', () => send({ type: 'abort' }));
 
 function send(msg) {
   if (!ws || ws.readyState !== 1) return log('not connected yet');
