@@ -81,8 +81,9 @@ npm run file -- --file clip.mp4             run a recorded video through the SDK
 --no-open                                   do not open a browser
 ```
 
-`web/replay.html` renders any saved session with no server, no camera and no SDK — it is what the
-static demo page uses.
+`web/replay.html` renders any saved session with no server, no camera and no SDK. It is deployed
+statically at **https://memeshee.github.io/halfbeat/** — open it and it renders the bundled sample
+session in the browser, with no install and nothing to trust but the JSON.
 
 ## Layout
 
