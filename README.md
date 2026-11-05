@@ -1,5 +1,8 @@
 # HalfBeat
 
+**Watch the 80-second demo:** [halfbeat-demo-v2.mp4](https://github.com/memeshee/halfbeat/releases/download/v0.1.0-demo/halfbeat-demo-v2.mp4)
+· **the report in a browser, no install:** [memeshee.github.io/halfbeat](https://memeshee.github.io/halfbeat/)
+
 **A camera-only interview trainer that scores the one thing nobody scores: how fast you come back
 down.** Built with the [Presage SmartSpectra SDK](https://github.com/Presage-Security/SmartSpectra),
 which estimates pulse, breathing, facial expression and talking from a plain webcam.
