@@ -45,8 +45,13 @@ code in this repository, not a policy we might change later.
 - **API key check.** Starting a session authenticates once with your SmartSpectra API key, and metric
   requests are authorised against the vendor's service. That request carries no video or vital values.
 - **No LLM, no analytics, no fonts, no CDNs.** The UI loads nothing from the network, including on the
-  replay page, which is why it also works offline. The SDK's optional “LLM Insights” feature is not
-  used anywhere in this app, so vitals never leave the device for a language model.
+  replay page, which is why it also works offline.
+- **The language-model channel is never requested.** The app contains no `requestInsight()` call. That
+  is a statement about our code; the bytes on the wire are a statement about the SDK. Rather than
+  assert either, `scripts/egress.mjs` watches every outbound TCP connection the app's process tree
+  opens during a session and writes `docs/EGRESS.md` — the endpoints the SDK's own metric
+  authorisation and licensing open show up there, in public, next to this claim. Runtime pulse
+  computation is on-device; no frame is uploaded to compute it.
 
 ## What this app is not
 

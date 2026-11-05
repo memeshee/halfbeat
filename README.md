@@ -57,6 +57,10 @@ game. Pretending otherwise would be the easy way to make a demo look better and 
 - **SDK telemetry is off by default** in this build: the SDK is constructed with
   `enableTelemetry: false` (see `src/source.mjs`). Pass `--telemetry` if you want the vendor's
   aggregate, non-identifying session diagnostics back on.
+- **Egress is measured, not promised.** `scripts/egress.mjs` watches every outbound TCP connection
+  the app's process tree opens while a session runs and writes `docs/EGRESS.md`. The app itself never
+  calls `requestInsight()` and never uploads a frame; the table is the evidence, including the
+  connections the SDK's own licensing and metric authorisation open.
 - **Wellness only.** Every figure here is a general-wellness estimate. The SDK is not an FDA-cleared
   device — Presage's cleared product is a separate thing — and nothing in this app is a diagnosis, a
   treatment, or a fitness-for-work assessment.

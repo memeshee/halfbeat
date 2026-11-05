@@ -108,9 +108,19 @@ function renderVitals() {
     pulseEl.classList.toggle('spike', base != null && s.pulse > base + (baseline?.pulseBand ?? 4));
     $('#pulse-age').textContent = ageS < 2 ? 'updated just now · 12s average' : `updated ${ageS}s ago · 12s average`;
     $('#pulse-conf').style.width = `${Math.min(100, s.pulseConf ?? 0)}%`;
-    $('#pulse-conf-num').textContent = s.pulseConf == null ? '—' : String(s.pulseConf);
+    // a label, not a score: the SDK's own stability threshold (confidence >= 40) is
+    // the only meaningful boundary here, and "78/100" invites reading it as a grade
+    $('#pulse-conf-num').textContent = s.pulseStable ? 'stable (±3 bpm)' : 'collecting…';
+    document.querySelector('.pulse-block').classList.toggle('stale', Date.now() - lastSampleAt > 8000);
   }
-  $('#v-br').textContent = s?.breathing == null ? '—' : `${s.breathing}/min`;
+  // The SDK's model card is explicit: breathing rate "does not work when: talking".
+  // So the answer window reports why it is absent instead of printing a number the
+  // documentation says cannot be trusted there.
+  const brEl = $('#v-br');
+  const inAnswer = state?.phase === 'answer';
+  brEl.textContent = inAnswer ? '— (invalid while talking)'
+    : s?.breathing == null ? '— (needs 30s)' : `${s.breathing}/min`;
+  brEl.className = `v ${inAnswer ? 'off' : ''}`;
   $('#v-hrv').textContent = s?.hrvRmssd == null ? '— (needs 60s)' : `${s.hrvRmssd} ms`;
   const talk = $('#v-talk');
   talk.textContent = s?.talking == null ? '—' : s.talking ? 'yes' : 'no';
