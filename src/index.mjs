@@ -25,6 +25,11 @@ To work on the UI without a key:  npm run replay   (synthetic signals, clearly l
   process.exit(2);
 }
 
+// Resolve the artefact path once, up front: the server's report handler and this file's
+// handler both fire, and the server needs to know which file is *this* session so it never
+// offers it back as a comparison.
+if (!cfg.out) cfg.out = path.join('sessions', `session-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+
 const source = new Source(cfg);
 const session = new Session(cfg, source);
 
@@ -54,7 +59,7 @@ if (!cfg.headless) {
 }
 
 session.on('report', (report) => {
-  const out = cfg.out ?? path.join('sessions', `session-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+  const out = cfg.out;
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, JSON.stringify(report, null, 1));
   console.log(`\n${report.headline}`);

@@ -2,6 +2,7 @@
 // Camera consent is a phase, not a checkbox: nothing captures until consent() flips it.
 import { EventEmitter } from 'node:events';
 import { buildBaseline, analyseRound, rankRounds, headline, compareSessions } from './recovery.mjs';
+import { assess, MIN_BASELINE_READINGS } from './integrity.mjs';
 
 export const PHASES = ['consent', 'check', 'baseline', 'question', 'answer', 'recover', 'report'];
 
@@ -27,6 +28,9 @@ export class Session extends EventEmitter {
     source.on('validation', (v) => { this.validation = v; this.#emitState(); });
     source.on('status', (s) => { this.statusLabel = s.label; this.#emitState(); });
     source.on('error', (e) => {
+      // A "not in a valid state" error arrives from the native layer when the file source
+      // hits EOF or the SDK is shutting down; after the report exists it means nothing.
+      if (this.finished && /valid state/i.test(e.message ?? '')) return;
       this.emit('error', e);
       this.emit('log', `SDK error ${e.code}: ${e.message}${e.retryable ? ' (retryable)' : ''}`);
     });
@@ -148,10 +152,19 @@ export class Session extends EventEmitter {
   #advance() {
     const elapsed = this.#elapsedSec();
     if (this.phase === 'baseline') {
-      if (elapsed >= this.cfg.baselineSec) {
-        this.baseline = buildBaseline(this.samples.filter((s) => s.phase === 'baseline'));
+      const window = this.samples.filter((s) => s.phase === 'baseline');
+      const quality = assess(window, { minReadings: MIN_BASELINE_READINGS });
+      this.baselineProgress = { readings: quality.readings, need: MIN_BASELINE_READINGS, status: quality.status };
+      // A baseline is only worth having if it is made of enough clean readings. The first
+      // real run built one out of two noisy ones and then reported a +36 bpm "recovery".
+      const ready = quality.status === 'stable' && elapsed >= this.cfg.baselineSec;
+      const hardStop = elapsed >= this.cfg.baselineSec * 2;
+      if (ready || hardStop) {
+        this.baseline = buildBaseline(window);
         this.emit('baseline', this.baseline);
         this.#setPhase('question');
+      } else {
+        this.#emitState();
       }
       return;
     }
@@ -187,6 +200,7 @@ export class Session extends EventEmitter {
       status: this.statusLabel,
       synthetic: this.source.isSynthetic,
       baseline: this.baseline ?? null,
+      baselineProgress: this.baselineProgress ?? null,
       current: this.current,
       latestRound: this.rounds[this.roundIndex]?.analysis ?? null,
       source: this.cfg.source,
@@ -238,10 +252,31 @@ export class Session extends EventEmitter {
         peak: r.analysis.peak,
         delta: r.analysis.delta,
       })),
-      headline: headline({ rounds: this.rounds }),
-      samples: this.samples,
+      // the headline needs the baseline too: "no baseline" and "no rise" are different
+      // outcomes and the first one must never be reported as a physiological finding
+      headline: headline({ rounds: this.rounds, baseline: this.baseline ?? null }),
+      sampleCount: this.samples.length,
+      samples: downsample(this.samples),
     };
   }
+}
+
+/** Keep roughly 1 Hz plus every row where the pulse measurement changed — the SDK emits
+ *  metrics per frame (measured: 22 Hz), which would bloat an artefact to megabytes while
+ *  adding no information the report can use. */
+export function downsample(samples, intervalMs = 1000) {
+  const out = [];
+  let lastKeptT = -Infinity;
+  let lastPulseTs = null;
+  for (const s of samples) {
+    const pulseChanged = s.pulseTs != null && s.pulseTs !== lastPulseTs;
+    if (pulseChanged || s.t - lastKeptT >= intervalMs) {
+      out.push(s);
+      lastKeptT = s.t;
+      if (pulseChanged) lastPulseTs = s.pulseTs;
+    }
+  }
+  return out;
 }
 
 export { compareSessions };

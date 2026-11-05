@@ -30,13 +30,15 @@ for (const clip of clips) {
   const name = path.basename(clip);
   const out = path.join(os.tmpdir(), `halfbeat-eval-${Date.now()}-${rows.length}.json`);
   // 90 s ceiling per clip: enough for pulse (12 s windows) and a 60 s HRV window.
+  // The first pulse window needs ~30 s of warm-up in recorded mode (measured): a shorter
+  // baseline returns zero readings and the integrity gate — correctly — refuses to score.
   const args = ['src/index.mjs', '--source', 'file', '--file', clip, '--headless',
-    '--baseline', '20', '--answer', '30', '--recover', '30', '--rounds', '1',
-    '--max-seconds', '95', '--out', out];
+    '--baseline', '45', '--answer', '25', '--recover', '25', '--rounds', '1',
+    '--max-seconds', '105', '--out', out];
   process.stdout.write(`\n▶ ${name}\n`);
   const code = await new Promise((resolve) => {
     const child = spawn(process.execPath, args, { stdio: ['ignore', 'inherit', 'inherit'] });
-    const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(124); }, 240000);
+    const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(124); }, 260000);
     child.on('exit', (c) => { clearTimeout(timer); resolve(c); });
   });
   if (code !== 0 || !fs.existsSync(out)) {

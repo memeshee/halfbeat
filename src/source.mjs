@@ -114,7 +114,7 @@ export class Source extends EventEmitter {
     this.mockTimer = setInterval(() => {
       const t = this.#now();
       if (t >= nextPulseAt) {
-        nextPulseAt = t + 6000;
+        nextPulseAt = t + 3000;
         heldPulse = this.#mockPulse(t, heldPulse);
         pulseTs = Math.round(t);
       }
@@ -145,7 +145,9 @@ export class Source extends EventEmitter {
     const noise = (Math.random() - 0.5) * 2.5;
     if (this.mode === 'recover') return Math.max(48, Math.min(120, baseline + (prev - baseline) * 0.5 + noise));
     const target = this.mode === 'answer' ? baseline + 19 : baseline;
-    return Math.max(48, Math.min(120, prev + (target - prev) * 0.5 + noise));
+    // ramp over roughly ten seconds, the way a body does it, so the integrity gate is not
+    // fighting the fake signal it was written to catch
+    return Math.max(48, Math.min(120, prev + (target - prev) * 0.22 + noise));
   }
 
   #mockBreathing() {

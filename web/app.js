@@ -133,12 +133,21 @@ function renderLive(s) {
   const names = { baseline: 'settle in', question: 'question', answer: 'answering', recover: 'coming back down' };
   $('#phase-name').textContent = `${names[s.phase] ?? s.phase}${s.rounds ? ` · ${Math.min(s.roundIndex + 1, s.rounds)}/${s.rounds}` : ''}`;
   const remaining = Math.max(0, Math.round((s.phaseDurationSec ?? 0) - (s.phaseElapsedSec ?? 0)));
-  $('#phase-count').textContent = s.phaseDurationSec ? `${remaining}s left` : '—';
+  if (s.phase === 'baseline' && remaining <= 0 && s.baselineProgress && s.baselineProgress.readings < s.baselineProgress.need) {
+    $('#phase-count').textContent = 'waiting for a clean signal…';
+  } else if (s.phase === 'baseline' && s.baselineProgress?.readings >= s.baselineProgress?.need && remaining > 0) {
+    $('#phase-count').textContent = `baseline ready · ${remaining}s left`;
+  } else {
+    $('#phase-count').textContent = s.phaseDurationSec ? `${remaining}s left` : '—';
+  }
 
   $('#question').textContent = s.question ?? 'Settle in. Sit still and breathe normally.';
   const hint = $('#stage-hint');
   if (s.phase === 'baseline') {
-    hint.textContent = 'This is the calm baseline every later number is measured against. Sit still, do not talk.';
+    const p = s.baselineProgress;
+    hint.textContent = p
+      ? `Learning your calm baseline — ${p.readings}/${p.need} clean pulse readings. Sit still, do not talk. A session with too few readings is not scored.`
+      : 'This is the calm baseline every later number is measured against. Sit still, do not talk.';
   } else if (s.phase === 'question') {
     hint.textContent = 'Read the question. Press “Answer now” and answer out loud — the app only needs the sound of you talking, not the words.';
   } else if (s.phase === 'answer') {
@@ -165,6 +174,64 @@ function drawLive() {
   });
 }
 
+async function loadCompareOptions() {
+  const sel = $('#compare-select');
+  const block = $('#compare-block');
+  if (!sel || !block) return;
+  try {
+    const rows = await (await fetch('/api/sessions')).json();
+    const usable = rows.filter((r) => r.rounds);
+    sel.innerHTML = '';
+    if (!usable.length) { block.classList.add('hidden'); return; }
+    block.classList.remove('hidden');
+    for (const r of usable) {
+      const o = document.createElement('option');
+      o.value = r.name;
+      o.textContent = `${r.endedAt.slice(0, 16).replace('T', ' ')} — ${(r.headline ?? '').slice(0, 70)}`;
+      sel.append(o);
+    }
+    sel.onchange = () => renderCompare(sel.value);
+    renderCompare(usable[0].name);
+  } catch {
+    block.classList.add('hidden');
+  }
+}
+
+async function renderCompare(prevName) {
+  const tb = document.querySelector('#compare-table tbody');
+  const note = $('#compare-note');
+  if (!tb) return;
+  tb.innerHTML = '';
+  try {
+    const data = await (await fetch(`/api/compare?prev=${encodeURIComponent(prevName)}`)).json();
+    if (!data.rows?.length) {
+      note.textContent = 'No question has a scored recovery in both sessions yet, so there is nothing honest to compare.';
+      return;
+    }
+    note.textContent = `Compared with ${prevName}`;
+    for (const r of data.rows) {
+      const tr = document.createElement('tr');
+      const cells = [
+        [r.question, ''],
+        [r.prevHalfLife == null ? '—' : `${r.prevHalfLife}s`, ''],
+        [r.nextHalfLife == null ? '—' : `${r.nextHalfLife}s`, ''],
+        [r.halfLifeDelta == null ? '—' : `${r.halfLifeDelta > 0 ? '+' : ''}${r.halfLifeDelta}s`, r.halfLifeDelta == null ? '' : r.halfLifeDelta > 0 ? 'up' : 'down'],
+        [r.prevPeak == null ? '—' : String(Math.round(r.prevPeak)), ''],
+        [r.nextPeak == null ? '—' : String(Math.round(r.nextPeak)), ''],
+      ];
+      for (const [text, cls] of cells) {
+        const td = document.createElement('td');
+        if (cls) td.className = cls;
+        td.textContent = text;
+        tr.append(td);
+      }
+      tb.append(tr);
+    }
+  } catch {
+    note.textContent = 'Could not read that session.';
+  }
+}
+
 function onReport(report) {
   show('report');
   renderReport(report, {
@@ -176,6 +243,7 @@ function onReport(report) {
     legend: $('#report-legend'),
   });
   log('session report ready');
+  loadCompareOptions();
 }
 
 $('#btn-consent').addEventListener('click', () => send({ type: 'consent' }));

@@ -119,7 +119,7 @@
         <div>
           <h3>Ranked by how slowly you came down</h3>
           <table id="report-table" class="rank"><thead><tr>
-            <th>question</th><th>peak</th><th>↑ baseline</th><th>back down</th><th>half-life</th>
+            <th>question</th><th>signal</th><th>peak</th><th>↑ baseline</th><th>back down</th><th>half-life</th>
           </tr></thead><tbody></tbody></table>
           <p class="fineprint">“back down” = seconds from your peak until pulse stayed inside your
           baseline band. Resolution is one 12-second pulse window; a dash means it never returned
@@ -130,6 +130,18 @@
           <canvas id="report-timeline" width="620" height="320"></canvas>
           <p id="report-legend" class="fineprint"></p>
         </div>
+      </div>
+      <div id="compare-block" class="compare hidden">
+        <h3>Same questions, earlier session</h3>
+        <div class="compare-controls">
+          <select id="compare-select"></select>
+          <span id="compare-note" class="fineprint"></span>
+        </div>
+        <table id="compare-table" class="rank"><thead><tr>
+          <th>question</th><th>half-life then</th><th>half-life now</th><th>change</th><th>peak then</th><th>peak now</th>
+        </tr></thead><tbody></tbody></table>
+        <p class="fineprint">Half-life is the decay constant of the pulse excess after the peak: shorter means
+        the body came down faster. Both columns come from your own sessions only.</p>
       </div>
       <div id="report-rounds" class="round-cards"></div>
       <div class="actions">

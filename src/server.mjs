@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { compareSessions } from './recovery.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const WEB = path.join(HERE, '..', 'web');
@@ -29,6 +30,53 @@ export function startServer({ port = 7777, session, cfg }) {
     if (url.pathname === '/api/state') {
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(session.state()));
+      return;
+    }
+    // Saved sessions are ordinary files in one directory. Listing them is what makes
+    // "run the same questions again and watch the number move" a product feature rather
+    // than a claim in a README.
+    if (url.pathname === '/api/sessions') {
+      const dir = cfg.sessionsDir ?? 'sessions';
+      let files = [];
+      try {
+        files = fs.readdirSync(dir)
+          .filter((f) => f.endsWith('.json'))
+          // never offer this session as its own comparison
+          .filter((f) => f !== session.ownFile)
+          .map((f) => {
+            const full = path.join(dir, f);
+            const st = fs.statSync(full);
+            let headline = null;
+            let rounds = null;
+            try {
+              const j = JSON.parse(fs.readFileSync(full, 'utf8'));
+              headline = j.headline ?? null;
+              rounds = (j.rounds ?? []).length;
+            } catch { /* unreadable, still list it */ }
+            return { name: f, mtime: st.mtimeMs, endedAt: new Date(st.mtimeMs).toISOString(), headline, rounds };
+          })
+          .sort((a, b) => b.mtime - a.mtime)
+          .slice(0, 20);
+      } catch { /* no directory yet */ }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(files));
+      return;
+    }
+    if (url.pathname === '/api/compare') {
+      const wanted = url.searchParams.get('prev');
+      const dir = cfg.sessionsDir ?? 'sessions';
+      const safe = path.basename(wanted ?? '');
+      const full = path.join(dir, safe);
+      if (!safe || !fs.existsSync(full)) {
+        res.writeHead(404, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: 'unknown session' }));
+        return;
+      }
+      let prev = null;
+      try { prev = JSON.parse(fs.readFileSync(full, 'utf8')); } catch { /* fall through */ }
+      const rows = prev ? compareSessions(prev, session.buildSession()) : null;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ prev: safe, rows }));
       return;
     }
     const rel = url.pathname === '/' ? 'index.html' : url.pathname.replace(/^\/+/, '');
@@ -84,6 +132,7 @@ export function startServer({ port = 7777, session, cfg }) {
     if (cfg.out) {
       fs.mkdirSync(path.dirname(cfg.out), { recursive: true });
       fs.writeFileSync(cfg.out, JSON.stringify(report, null, 1));
+      session.ownFile = path.basename(cfg.out);
       broadcast({ type: 'log', line: `session written to ${cfg.out}` });
     }
   });
