@@ -91,7 +91,9 @@ export class Source extends EventEmitter {
       // Pace frames at the clip's native rate so wall-clock phases and the SDK's
       // media timeline stay aligned (the analysis in recovery.mjs assumes ~1:1).
       const fps = detectFps(this.cfg.file);
-      const opts = { interframeDelayMs: Math.round(1000 / (fps || 30)) };
+      // exact pacing, not a rounded frame period: 29.97 fps is 33.37 ms, and rounding to
+      // 33 ms drifts a second over a 60-second clip, which would skew the media timeline
+      const opts = { interframeDelayMs: Math.round((1000 / (fps || 30)) * 100) / 100 };
       if (this.cfg.maxSeconds) opts.maxDurationMs = this.cfg.maxSeconds * 1000;
       this.emit('log', `file source: ${this.cfg.file} (${fps || 'unknown'} fps, pacing ${opts.interframeDelayMs} ms/frame)`);
       this.sdk.useFile(this.cfg.file, opts);
@@ -169,7 +171,8 @@ function detectFps(file) {
   try {
     const out = execFileSync('ffprobe', ['-v', '0', '-select_streams', 'v:0', '-show_entries', 'stream=r_frame_rate', '-of', 'csv=p=0', file], { encoding: 'utf8' });
     const [n, d] = out.trim().split('/').map(Number);
-    return d ? Math.round(n / d) : n || null;
+    const fps = d ? n / d : n;
+    return fps ? Math.round(fps * 100) / 100 : null;
   } catch {
     return null;
   }
