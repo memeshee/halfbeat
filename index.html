@@ -1,1 +1,161 @@
-<!doctype html><meta charset=utf-8><meta http-equiv=refresh content="0;url=replay.html"><title>HalfBeat replay</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HalfBeat — how fast do you come back down?</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="wordmark">HalfBeat</span>
+    <span class="tagline">how fast do you come back down?</span>
+  </div>
+  <div class="chips">
+    <span id="chip-camera" class="chip off">camera off</span>
+    <span id="chip-source" class="chip">connecting…</span>
+    <span class="chip quiet">SDK telemetry <strong id="chip-telemetry">off</strong></span>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- 1. consent -->
+  <section id="screen-consent" class="screen active">
+    <div class="card wide">
+      <h1>Your camera, your call.</h1>
+      <p class="lede tight">HalfBeat estimates pulse, breathing and talking from your webcam, then shows
+      how fast your body settles after a hard interview question.</p>
+      <ul class="consent-list">
+        <li><strong>Camera only — no microphone, no audio.</strong> “Talking” is detected from your face
+        on video, not from sound.</li>
+        <li><strong>No video is stored and nothing leaves this machine.</strong> Frames are processed in
+        memory and thrown away; the browser UI is served from <code>127.0.0.1</code>; the SDK's usage
+        telemetry is switched off in this build.</li>
+        <li><strong>What is saved:</strong> at the end of the session, one small numbers-only file in
+        <code>sessions/</code> on this computer — no images, no audio, no landmarks. Delete the folder
+        and it is gone.</li>
+        <li><strong>Wellness only.</strong> These are general-wellness estimates, not a medical
+        measurement or a diagnosis.</li>
+        <li><strong>Stop any time:</strong> press <em>Stop &amp; end session</em> on the live screen, or
+        <kbd>Ctrl</kbd>+<kbd>C</kbd> in the terminal. The camera turns off and the numbers so far are
+        saved.</li>
+      </ul>
+      <div class="actions">
+        <button id="btn-consent" class="primary">Turn on the camera and continue</button>
+        <a class="ghost" href="replay.html">open a saved session →</a>
+      </div>
+      <p class="fineprint">By continuing you consent to your webcam being used for this session. You can
+      withdraw at any time by stopping the app.</p>
+    </div>
+  </section>
+
+  <!-- 2. camera check -->
+  <section id="screen-check" class="screen">
+    <div class="card wide">
+      <h2>Framing check</h2>
+      <p class="lede">Face the camera, upper chest in frame, ordinary room light on your face — no
+      backlight behind you. Pulse works best when you are still; breathing needs your chest visible.</p>
+      <div class="check-grid">
+        <div class="check-item"><span class="k">face</span><span id="check-face" class="v">—</span></div>
+        <div class="check-item"><span class="k">lighting</span><span id="check-light" class="v">—</span></div>
+        <div class="check-item"><span class="k">signal</span><span id="check-signal" class="v">—</span></div>
+      </div>
+      <p id="check-hint" class="hint">waiting for the SDK…</p>
+      <div class="actions">
+        <button id="btn-begin" class="primary">Start the settle-in phase (45s)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3–6. live session -->
+  <section id="screen-live" class="screen">
+    <div class="live">
+      <aside class="vitals">
+        <div class="pulse-block">
+          <div class="label">pulse <span class="unit">bpm</span></div>
+          <div id="pulse-value" class="big">—</div>
+          <div id="pulse-age" class="age">no reading yet</div>
+          <div class="conf"><div id="pulse-conf" class="conf-fill"></div></div>
+          <div class="conf-label">confidence <span id="pulse-conf-num">—</span></div>
+        </div>
+        <div class="rows">
+          <div class="row"><span class="k">breathing</span><span id="v-br" class="v">—</span></div>
+          <div class="row"><span class="k">hrv (rmssd)</span><span id="v-hrv" class="v">—</span></div>
+          <div class="row"><span class="k">talking</span><span id="v-talk" class="v">—</span></div>
+          <div class="row"><span class="k">expression</span><span id="v-expr" class="v">—</span></div>
+          <div class="row"><span class="k">baseline</span><span id="v-baseline" class="v">—</span></div>
+        </div>
+        <p class="fineprint tiny">Pulse is a 12-second average. Every number here is compared to your
+        own settle-in baseline, never to anyone else's.</p>
+      </aside>
+
+      <section class="stage">
+        <div class="phase-bar">
+          <span id="phase-name" class="phase-name">settle in</span>
+          <span id="phase-count" class="phase-count">—</span>
+        </div>
+        <h2 id="question" class="question">&nbsp;</h2>
+        <p id="stage-hint" class="hint">Sit still, breathe normally, do not talk. This is how the app
+        learns what your calm looks like.</p>
+        <canvas id="timeline" width="880" height="240"></canvas>
+        <div class="actions">
+          <button id="btn-answer" class="primary hidden">Answer now</button>
+          <button id="btn-endanswer" class="ghost hidden">Done answering →</button>
+          <button id="btn-finish" class="ghost hidden">Finish session</button>
+          <button id="btn-stop" class="ghost hidden">Stop &amp; end session</button>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- 7. report -->
+  <section id="screen-report" class="screen">
+    <div class="report">
+      <p class="kicker">session report</p>
+      <h1 id="report-headline">—</h1>
+      <div id="report-meta" class="meta"></div>
+      <div class="report-grid">
+        <div>
+          <h3>Ranked by how slowly you came down</h3>
+          <table id="report-table" class="rank"><thead><tr>
+            <th>question</th><th>signal</th><th>peak</th><th>↑ baseline</th><th>back down</th><th>half-life</th>
+          </tr></thead><tbody></tbody></table>
+          <p class="fineprint">“back down” = seconds from your peak until pulse stayed inside your
+          baseline band. Resolution is one 12-second pulse window; a dash means it never returned
+          inside the window.</p>
+        </div>
+        <div>
+          <h3>Timeline</h3>
+          <canvas id="report-timeline" width="620" height="320"></canvas>
+          <p id="report-legend" class="fineprint"></p>
+        </div>
+      </div>
+      <div id="compare-block" class="compare hidden">
+        <h3>Same questions, earlier session</h3>
+        <div class="compare-controls">
+          <select id="compare-select"></select>
+          <span id="compare-note" class="fineprint"></span>
+        </div>
+        <table id="compare-table" class="rank"><thead><tr>
+          <th>question</th><th>half-life then</th><th>half-life now</th><th>change</th><th>peak then</th><th>peak now</th>
+        </tr></thead><tbody></tbody></table>
+        <p class="fineprint">Half-life is the decay constant of the pulse excess after the peak: shorter means
+        the body came down faster. Both columns come from your own sessions only.</p>
+      </div>
+      <div id="report-rounds" class="round-cards"></div>
+      <div class="actions">
+        <a class="primary" id="btn-again" href="/">Run it again</a>
+        <a class="ghost" href="replay.html">Open a saved session →</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<aside id="log" class="log" aria-live="polite"></aside>
+<script type="module" src="app.js"></script>
+</body>
+</html>

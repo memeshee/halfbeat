@@ -212,29 +212,42 @@ export function renderReport(session, refs) {
   if (table) {
     const tb = table.querySelector('tbody');
     tb.innerHTML = '';
-    const rows = session.ranking?.length ? session.ranking : (session.rounds ?? []).map((r) => ({
-      question: r.question,
-      timeToBandSec: r.analysis?.timeToBandSec,
-      halfLifeSec: r.analysis?.halfLifeSec,
-      peak: r.analysis?.peak,
-      delta: r.analysis?.delta,
-    }));
-    if (!rows.length) {
+    const rounds = session.rounds ?? [];
+    if (!rounds.length) {
       const tr = el('tr');
-      const td = el('td', 'dash', 'Not enough clean pulse data to score this session.');
-      td.colSpan = 5;
+      const td = el('td', 'dash', 'No rounds were completed in this session.');
+      td.colSpan = 6;
       tr.append(td); tb.append(tr);
     }
-    for (const row of rows) {
+    for (const r of rounds) {
+      const a = r.analysis ?? {};
+      const scored = !!a.sufficient;
       const tr = el('tr');
-      tr.append(el('td', null, row.question));
-      tr.append(el('td', null, row.peak == null ? '—' : String(Math.round(row.peak))));
-      tr.append(el('td', null, row.delta == null ? '—' : `+${Math.round(row.delta)}`));
-      const t2b = el('td', row.timeToBandSec == null ? 'dash' : row.timeToBandSec > 30 ? 'slow' : 'fast',
-        row.timeToBandSec == null ? 'never' : `${row.timeToBandSec}s`);
-      tr.append(t2b);
-      tr.append(el('td', null, row.halfLifeSec == null ? '—' : `${row.halfLifeSec}s`));
+      tr.append(el('td', null, r.question));
+
+      // signal verdict first: a refusal is the most important thing on the row
+      const q = a.quality?.status ?? (session.baseline?.established === false ? 'insufficient' : 'unknown');
+      const qCell = el('td', q === 'stable' ? 'fast' : 'dash', q);
+      qCell.title = (a.quality?.reasons ?? a.reason ? [a.reason, ...(a.quality?.reasons ?? [])].filter(Boolean).join('; ') : '');
+      tr.append(qCell);
+
+      tr.append(el('td', null, scored ? String(Math.round(a.peak)) : '—'));
+      tr.append(el('td', null, scored ? `+${Math.round(a.delta)}` : '—'));
+      let backText, backCls;
+      if (!scored) { backText = 'not scored'; backCls = 'dash'; }
+      else if (!a.rose) { backText = 'no rise'; backCls = 'dash'; }
+      else if (a.timeToBandSec == null) { backText = 'never'; backCls = 'slow'; }
+      else { backText = `${a.timeToBandSec}s`; backCls = a.timeToBandSec > 30 ? 'slow' : 'fast'; }
+      tr.append(el('td', backCls, backText));
+      tr.append(el('td', null, scored && a.halfLifeSec != null ? `${a.halfLifeSec}s` : '—'));
       tb.append(tr);
+
+      if (!scored && (a.reason || a.quality?.reasons?.length)) {
+        const why = el('tr');
+        const td = el('td', 'fineprint', `— ${a.reason ?? a.quality.reasons.join('; ')}`);
+        td.colSpan = 6;
+        why.append(td); tb.append(why);
+      }
     }
   }
 
@@ -245,11 +258,12 @@ export function renderReport(session, refs) {
       c.append(el('div', 'q', `Q${r.index + 1} · ${r.question}`));
       const a = r.analysis ?? {};
       for (const [k, v] of [
-        ['peak', a.peak == null ? '—' : String(Math.round(a.peak))],
-        ['above baseline', a.delta == null ? '—' : `+${Math.round(a.delta)} bpm`],
-        ['back down', a.timeToBandSec == null ? 'never (in window)' : `${a.timeToBandSec}s`],
-        ['half-life', a.halfLifeSec == null ? '—' : `${a.halfLifeSec}s`],
-        ['pulse readings', num(a.readings)],
+        ['signal', a.quality?.status ?? 'unknown'],
+        ['readings kept', num(a.readings ?? a.quality?.readings)],
+        ['peak', a.sufficient ? (a.peak == null ? '—' : String(Math.round(a.peak))) : '—'],
+        ['above baseline', !a.sufficient || a.delta == null ? '—' : `+${Math.round(a.delta)} bpm`],
+        ['back down', !a.sufficient ? 'not scored' : a.timeToBandSec == null ? (a.rose ? 'never (in window)' : 'no rise') : `${a.timeToBandSec}s`],
+        ['half-life', a.sufficient && a.halfLifeSec != null ? `${a.halfLifeSec}s` : '—'],
       ]) {
         const s = el('div', 'stat');
         s.append(el('span', null, k), el('b', null, String(v)));
