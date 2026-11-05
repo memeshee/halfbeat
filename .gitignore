@@ -3,3 +3,5 @@ sessions/
 clips/
 *.log
 .DS_Store
+post/
+_assets/
