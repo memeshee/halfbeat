@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HalfBeat — session replay</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <span class="mark" aria-hidden="true"></span>
+    <span class="wordmark">HalfBeat</span>
+    <span class="tagline">replay a saved session</span>
+  </div>
+  <div class="chips"><span class="chip">static page · no camera · no SDK</span></div>
+</header>
+
+<main>
+  <section class="screen active">
+    <div class="report">
+      <p class="kicker">session report</p>
+      <h1 id="report-headline">Drop a session file to see it</h1>
+      <div id="report-meta" class="meta"></div>
+
+      <div class="actions" style="margin: 0 0 22px">
+        <label class="primary" style="cursor:pointer">
+          Open a session JSON
+          <input id="file" type="file" accept="application/json,.json" style="display:none">
+        </label>
+        <a class="ghost" href="sample-session.json">or load the sample session</a>
+        <a class="ghost" href="/">← run a live session</a>
+      </div>
+
+      <div class="report-grid">
+        <div>
+          <h3>Ranked by how slowly you came down</h3>
+          <table id="report-table" class="rank"><thead><tr>
+            <th>question</th><th>peak</th><th>↑ baseline</th><th>back down</th><th>half-life</th>
+          </tr></thead><tbody></tbody></table>
+          <p class="fineprint">“back down” = seconds from your peak until pulse stayed inside your
+          baseline band. Resolution is one 12-second pulse window.</p>
+        </div>
+        <div>
+          <h3>Timeline</h3>
+          <canvas id="report-timeline" width="620" height="320"></canvas>
+          <p id="report-legend" class="fineprint"></p>
+        </div>
+      </div>
+      <div id="report-rounds" class="round-cards"></div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+import { renderReport } from './report.js';
+
+const refs = {
+  headline: document.querySelector('#report-headline'),
+  meta: document.querySelector('#report-meta'),
+  table: document.querySelector('#report-table'),
+  cards: document.querySelector('#report-rounds'),
+  canvas: document.querySelector('#report-timeline'),
+  legend: document.querySelector('#report-legend'),
+};
+
+function load(session) {
+  renderReport(session, refs);
+  document.querySelector('#report-headline').insertAdjacentText('beforebegin', '');
+}
+
+async function loadUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  load(await res.json());
+}
+
+document.querySelector('#file').addEventListener('change', async (e) => {
+  const f = e.target.files?.[0];
+  if (!f) return;
+  load(JSON.parse(await f.text()));
+});
+
+const src = new URLSearchParams(location.search).get('session');
+if (src) loadUrl(src).catch((err) => { refs.headline.textContent = `Could not load ${src}: ${err.message}`; });
+</script>
+</body>
+</html>
