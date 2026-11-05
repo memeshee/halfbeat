@@ -1,0 +1,20 @@
+{
+  "name": "halfbeat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "How fast do you come back down? A camera-only recovery trainer built on the Presage SmartSpectra SDK.",
+  "license": "MIT",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/index.mjs --source camera",
+    "replay": "node src/index.mjs --source mock",
+    "file": "node src/index.mjs --source file",
+    "eval": "node scripts/eval.mjs",
+    "verify": "node scripts/verify.mjs"
+  },
+  "dependencies": {
+    "@smartspectra/node-sdk": "^3.4.0",
+    "ws": "^8.18.0"
+  }
+}
