@@ -68,9 +68,27 @@ async function flushAndExit(reason) {
   process.exit(0);
 }
 
+// "Run it again" without a restart: the artefact path rotates, so a second session in the
+// same process can never overwrite the first one's file.
+function nextOutPath() {
+  return path.join(cfg.sessionsDir ?? 'sessions', `session-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+}
+async function restartSession() {
+  session.reset();
+  cfg.out = nextOutPath();
+  session.ownFile = path.basename(cfg.out);
+  try {
+    await source.start(key);
+  } catch (err) {
+    console.error(`could not restart capture: ${err.message}`);
+  }
+  console.log(`\nnew session → ${cfg.out}`);
+  return session.state();
+}
+
 let serverHandle = null;
 if (!cfg.headless) {
-  serverHandle = startServer({ port: cfg.port, session, cfg, onAbort: () => flushAndExit('stop button') });
+  serverHandle = startServer({ port: cfg.port, session, cfg, onAbort: () => flushAndExit('stop button'), onRestart: restartSession });
   if (cfg.open && process.env.DISPLAY) {
     spawn('xdg-open', [`http://127.0.0.1:${cfg.port}`], { stdio: 'ignore', detached: true }).unref();
   }

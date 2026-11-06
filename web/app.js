@@ -253,6 +253,12 @@ $('#btn-answer').addEventListener('click', () => send({ type: 'answer' }));
 $('#btn-endanswer').addEventListener('click', () => send({ type: 'endAnswer' }));
 $('#btn-finish').addEventListener('click', () => send({ type: 'finish' }));
 $('#btn-stop').addEventListener('click', () => send({ type: 'abort' }));
+// A reload alone re-renders the finished report; the session has to go back to the consent
+// gate on the server, then the page reloads into a clean run.
+$('#btn-again').addEventListener('click', () => {
+  send({ type: 'restart' });
+  setTimeout(() => location.reload(), 1200);
+});
 
 function send(msg) {
   if (!ws || ws.readyState !== 1) return log('not connected yet');

@@ -19,7 +19,7 @@ const MIME = {
   '.ico': 'image/x-icon',
 };
 
-export function startServer({ port = 7777, session, cfg, onAbort = null }) {
+export function startServer({ port = 7777, session, cfg, onAbort = null, onRestart = null }) {
   const server = http.createServer((req, res) => {
     // A request target of `//`, `///` or `http://[` makes `new URL` throw, and a throw inside a
     // request listener is uncaught: one <img src="http://127.0.0.1:PORT//"> on any page you visit
@@ -135,6 +135,12 @@ export function startServer({ port = 7777, session, cfg, onAbort = null }) {
           case 'finish': session.finish(); break;
           // Flush what exists before dying: an abort used to exit with no artefact at all.
           case 'abort': await session.abort(); if (onAbort) await onAbort(); else process.exit(0); break;
+          case 'restart': {
+            if (!onRestart) { ws.send(JSON.stringify({ type: 'error', error: 'restart is not available in this mode' })); break; }
+            const state = await onRestart();
+            broadcast({ type: 'state', state });
+            break;
+          }
           default: break;
         }
       } catch (err) {

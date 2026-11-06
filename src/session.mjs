@@ -37,6 +37,29 @@ export class Session extends EventEmitter {
     source.on('log', (l) => this.emit('log', l));
   }
 
+  /** Back to the consent gate with a clean slate, so one process can serve several sessions.
+   *  Listeners stay attached — they were bound to `source` in the constructor, and re-creating
+   *  the Session would double them. */
+  reset() {
+    if (this.tick) clearInterval(this.tick);
+    this.tick = null;
+    this.phase = 'consent';
+    this.roundIndex = -1;
+    this.startedAt = null;
+    this.phaseStartedAt = null;
+    this.samples = [];
+    this.rounds = [];
+    this.current = null;
+    this.validation = { code: 0, hint: 'waiting' };
+    this.statusLabel = 'idle';
+    this.consented = false;
+    this.finished = false;
+    this.baselineSamples = [];
+    this.lastReport = null;
+    this.#emitState();
+    return this.state();
+  }
+
   /** Explicit camera consent. Refuses to move on without it. */
   consent() {
     if (this.phase !== 'consent') return this.state();

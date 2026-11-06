@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { buildBaseline, analyseRound, rankRounds, headline } from '../src/recovery.mjs';
+import { Session } from '../src/session.mjs';
 
 const failures = [];
 const ok = (name, cond, detail = '') => {
@@ -103,6 +104,24 @@ if (fs.existsSync(out)) {
   fs.unlinkSync(out);
 } else {
   ok('artefact written', false, out);
+}
+
+// "Run it again" must be real: a finished session has to go back to the consent gate with a
+// clean slate, or the button is a link to the report the user is already looking at.
+{
+  const cfg = { rounds: 1, baselineSec: 1, answerSec: 1, recoverSec: 1, questions: ['q'], telemetry: false };
+  const fake = new (await import('node:events')).EventEmitter();
+  const sess = new Session(cfg, fake);
+  sess.consent();
+  fake.emit('sample', { t: 1000, pulse: 60, pulseConf: 60, pulseKey: 'k1', talking: false });
+  sess.finished = true;
+  const st = sess.reset();
+  ok('reset returns the session to the consent gate', st.phase === 'consent' && sess.phase === 'consent');
+  ok('reset clears samples, rounds and consent',
+    sess.samples.length === 0 && sess.rounds.length === 0 && sess.consented === false,
+    `${sess.samples.length} samples / ${sess.rounds.length} rounds / consented=${sess.consented}`);
+  ok('reset clears the finished flag and the last report', sess.finished === false && !sess.lastReport);
+  ok('a reset session accepts consent again', sess.consent().phase === 'check');
 }
 
 console.log('\n3. static surfaces exist for the replay page');
