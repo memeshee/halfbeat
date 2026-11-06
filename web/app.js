@@ -27,7 +27,33 @@ function log(line) {
   logBox.scrollTop = logBox.scrollHeight;
 }
 
+// Served from GitHub Pages there is no server to talk to. Rather than sit on "connecting…"
+// forever, render the bundled session — a real capture written by the app, not a mock.
+const STATIC_HOST = !/^(127\.0\.0\.1|localhost|\[::1\]|::1)$/.test(location.hostname);
+
+async function loadStatic() {
+  try {
+    const res = await fetch('sample-session.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`${res.status}`);
+    const data = await res.json();
+    const chip = $('#chip-source');
+    chip.textContent = 'static replay';
+    chip.className = 'chip clip';
+    $('#chip-camera').textContent = 'no camera';
+    onReport(data);
+    // nothing here can start a session or talk to a server
+    $('#btn-again').textContent = 'Run it on your machine →';
+    $('#btn-again').onclick = () => { location.href = 'https://github.com/memeshee/halfbeat'; };
+    $('#btn-stop').classList.add('hidden');
+    $('#compare-block').classList.add('hidden');
+  } catch (err) {
+    $('#chip-source').textContent = 'no session to show';
+    log(`static replay failed: ${err.message}`);
+  }
+}
+
 function connect() {
+  if (STATIC_HOST) return loadStatic();
   ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => log('connected to the local session');
   ws.onclose = () => { log('disconnected'); setTimeout(connect, 1200); };
